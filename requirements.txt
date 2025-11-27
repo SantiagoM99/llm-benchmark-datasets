@@ -2,3 +2,6 @@ openai
 python-dotenv
 pandas
 ipykernel
+pyarrow
+fastparquet
+tqdm
