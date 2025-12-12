@@ -25,11 +25,12 @@ WEAVE_PROJECT = "scibeto-benchmark-evaluation"
 
 
 def get_llm(model_name: str, provider: str):
-    """Get LLM based on provider."""
     if provider == "openai":
         return OpenAILLM(model_name=model_name)
-    else:
+    elif provider == "huggingface":
         return HuggingFaceLLM(model_name=model_name, load_in_4bit=True)
+    else:
+        raise ValueError(f"Provider '{provider}' not supported")
 
 
 def get_few_shot_examples(dataset, n_examples: int, labels: List[str]) -> List[dict]:

@@ -8,9 +8,6 @@ from models.base_llm import BaseLLM
 class HuggingFaceLLM(BaseLLM):
     """
     Generic wrapper for HuggingFace models.
-    
-    Supports various models (Llama, Gemma, Qwen, etc.) with options for
-    quantization and different hardware configurations.
     """
     
     def __init__(
@@ -24,24 +21,10 @@ class HuggingFaceLLM(BaseLLM):
         use_flash_attention: bool = False,
         **kwargs
     ):
-        """
-        Initialize the HuggingFace LLM.
-        
-        Args:
-            model_name: HuggingFace model identifier (e.g., 'meta-llama/Llama-3.1-8B-Instruct')
-            device: Device to load model on ('cuda', 'cpu', or None for auto-detect)
-            load_in_8bit: Load model with 8-bit quantization
-            load_in_4bit: Load model with 4-bit quantization
-            torch_dtype: Torch dtype for model weights (default: float16)
-            trust_remote_code: Trust remote code from model repository
-            use_flash_attention: Use Flash Attention 2 for faster inference
-            **kwargs: Additional arguments passed to AutoModelForCausalLM.from_pretrained()
-        """
         super().__init__(model_name, **kwargs)
         
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Setup quantization config
         quantization_config = None
         if load_in_8bit or load_in_4bit:
             quantization_config = BitsAndBytesConfig(
@@ -52,12 +35,11 @@ class HuggingFaceLLM(BaseLLM):
                 bnb_4bit_quant_type="nf4"
             )
         
-        # Model loading kwargs
         model_kwargs = {
             "quantization_config": quantization_config,
             "torch_dtype": torch_dtype or torch.float16,
             "trust_remote_code": trust_remote_code,
-            "device_map": "auto" if quantization_config else None,
+            "device_map": "cuda:0",
             **kwargs
         }
         
@@ -68,7 +50,6 @@ class HuggingFaceLLM(BaseLLM):
         print(f"Device: {self.device}")
         print(f"Quantization: {'8-bit' if load_in_8bit else '4-bit' if load_in_4bit else 'None'}")
         
-        # Load tokenizer and model
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             trust_remote_code=trust_remote_code
@@ -79,18 +60,14 @@ class HuggingFaceLLM(BaseLLM):
             **model_kwargs
         )
         
-        # Move model to device if not using quantization
         if not quantization_config:
             self.model.to(self.device)
         
-        # Setup pad token if it doesn't exist
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
         
-        # Set model to eval mode
         self.model.eval()
-        
         print(f"Model loaded successfully!")
     
     def generate(
@@ -101,21 +78,21 @@ class HuggingFaceLLM(BaseLLM):
         do_sample: bool = False,
         **kwargs
     ) -> str:
-        """
-        Generate a response given a prompt.
+        """Generate a response using the model's chat template."""
         
-        Args:
-            prompt: The prompt to send to the model
-            max_tokens: Maximum number of tokens to generate
-            temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative)
-            top_p: Nucleus sampling parameter
-            do_sample: Whether to use sampling or greedy decoding
-            **kwargs: Additional generation parameters
-            
-        Returns:
-            Generated text as string
-        """
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        # Usar chat template si el modelo lo soporta
+        messages = [{"role": "user", "content": prompt}]
+        
+        if hasattr(self.tokenizer, 'apply_chat_template'):
+            formatted_prompt = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+        else:
+            formatted_prompt = prompt
+        
+        inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.model.device)
         
         with torch.no_grad():
             outputs = self.model.generate(
@@ -127,7 +104,6 @@ class HuggingFaceLLM(BaseLLM):
                 **kwargs
             )
         
-        # Decode only the new tokens (without the prompt)
         response = self.tokenizer.decode(
             outputs[0][inputs['input_ids'].shape[1]:], 
             skip_special_tokens=True
@@ -142,57 +118,20 @@ class HuggingFaceLLM(BaseLLM):
         temperature: float = 0.7,
         top_p: float = 0.9,
         do_sample: bool = False,
-        batch_size: int = 4,
+        batch_size: int = 1,  # Cambiado a 1 para evitar problemas
         **kwargs
     ) -> List[str]:
-        """
-        Generate responses for multiple prompts.
-        
-        Args:
-            prompts: List of prompts
-            max_tokens: Maximum number of tokens to generate per prompt
-            temperature: Sampling temperature
-            top_p: Nucleus sampling parameter
-            do_sample: Whether to use sampling or greedy decoding
-            batch_size: Number of prompts to process simultaneously
-            **kwargs: Additional generation parameters
-            
-        Returns:
-            List of generated texts
-        """
+        """Generate responses for multiple prompts."""
         responses = []
         
-        for i in range(0, len(prompts), batch_size):
-            batch = prompts[i:i + batch_size]
-            
-            # Tokenize batch
-            inputs = self.tokenizer(
-                batch, 
-                return_tensors="pt", 
-                padding=True, 
-                truncation=True,
-                max_length=2048  # Prevent extremely long prompts
-            ).to(self.device)
-            
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=max_tokens,
-                    do_sample=do_sample,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id,
-                    **kwargs
-                )
-            
-            # Decode each output
-            for j, output in enumerate(outputs):
-                # Find where the prompt ends
-                prompt_length = inputs['input_ids'][j].shape[0]
-                response = self.tokenizer.decode(
-                    output[prompt_length:],
-                    skip_special_tokens=True
-                )
-                responses.append(response.strip())
+        for prompt in prompts:
+            response = self.generate(
+                prompt,
+                max_tokens=max_tokens,
+                do_sample=do_sample,
+                **kwargs
+            )
+            responses.append(response)
         
         return responses
     

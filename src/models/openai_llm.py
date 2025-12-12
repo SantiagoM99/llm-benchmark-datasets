@@ -3,7 +3,7 @@ OpenAI and Azure OpenAI LLM wrapper.
 """
 import os
 from typing import List
-from openai import AzureOpenAI
+from openai import AzureOpenAI, BadRequestError
 from models.base_llm import BaseLLM
 
 
@@ -26,13 +26,17 @@ class OpenAILLM(BaseLLM):
         temperature: float = 0.0,
         **kwargs
     ) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-        return response.choices[0].message.content.strip()
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return response.choices[0].message.content.strip()
+        except BadRequestError as e:
+            print(f"Content filter triggered, returning 'FILTERED'")
+            return "FILTERED"
     
     def batch_generate(
         self,
