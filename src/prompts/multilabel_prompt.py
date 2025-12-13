@@ -1,5 +1,5 @@
 # src/prompts/multilabel_prompt.py
-from typing import List
+from typing import List, Dict, Optional
 from prompts.base_prompt import BasePromptTemplate
 
 
@@ -11,7 +11,7 @@ class MultiLabelPromptTemplate(BasePromptTemplate):
     into one or more categories from a predefined set.
     """
     
-    def __init__(self, available_labels: List[str], language: str = "es"):
+    def __init__(self, available_labels: List[str], language: str = "es", label_descriptions: Optional[Dict[str, str]] = None):
         """
         Initialize the multi-label prompt template.
         
@@ -21,6 +21,7 @@ class MultiLabelPromptTemplate(BasePromptTemplate):
         """
         super().__init__(language=language)
         self.available_labels = available_labels
+        self.label_descriptions = label_descriptions or {}
     
     def create_prompt(self, text: str, **kwargs) -> str:
         """
@@ -34,11 +35,25 @@ class MultiLabelPromptTemplate(BasePromptTemplate):
             Formatted prompt as string
         """
         labels_str = ", ".join(self.available_labels)
+
+        # Build a readable list of labels with descriptions if available
+        if self.label_descriptions:
+            labeled_lines = []
+            for code in self.available_labels:
+                desc = self.label_descriptions.get(code, "")
+                if desc:
+                    labeled_lines.append(f"- {code}: {desc}")
+                else:
+                    labeled_lines.append(f"- {code}")
+            labels_block = "\n".join(labeled_lines)
+        else:
+            labels_block = labels_str
         
         if self.language == "es":
             prompt = f"""Eres un asistente experto en clasificación de documentos económicos.
 
-Categorías disponibles: {labels_str}
+Categorías disponibles:
+{labels_block}
 
 Tu tarea es clasificar el siguiente texto en una o más de las categorías anteriores.
 
@@ -55,7 +70,8 @@ Categorías:"""
         else:
             prompt = f"""You are an expert assistant in economic document classification.
 
-Available categories: {labels_str}
+Available categories:
+{labels_block}
 
 Your task is to classify the following text into one or more of the above categories.
 

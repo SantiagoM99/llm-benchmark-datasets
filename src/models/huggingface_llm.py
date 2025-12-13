@@ -48,7 +48,13 @@ class HuggingFaceLLM(BaseLLM):
         
         print(f"Loading model: {model_name}")
         print(f"Device: {self.device}")
-        print(f"Quantization: {'8-bit' if load_in_8bit else '4-bit' if load_in_4bit else 'None'}")
+        if load_in_8bit:
+            quant_str = "8-bit"
+        elif load_in_4bit:
+            quant_str = "4-bit"
+        else:
+            quant_str = "None"
+        print(f"Quantization: {quant_str}")
         
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name,
@@ -68,7 +74,7 @@ class HuggingFaceLLM(BaseLLM):
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
         
         self.model.eval()
-        print(f"Model loaded successfully!")
+        print("Model loaded successfully!")
     
     def generate(
         self, 

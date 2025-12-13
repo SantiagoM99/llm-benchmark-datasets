@@ -7,7 +7,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 # test_multilabel_light.py
 from evaluation.multilabel_predictor import MultiLabelPredictor
+from evaluation.metrics import compute_multilabel_metrics, save_metrics
 from utils.multilabel_datareader import MultiLabelDataset
+from utils.jel_categories import get_jel_names
 from models.huggingface_llm import HuggingFaceLLM
 from models.llm_multilabel_model import LLMMultiLabelModel
 from prompts.multilabel_prompt import MultiLabelPromptTemplate
@@ -16,7 +18,7 @@ import torch
 
 def main():
     print("="*60)
-    print("TESTING MULTILABEL CLASSIFICATION WITH QWEN2.5-0.5B")
+    print("TESTING MULTILABEL CLASSIFICATION FOR JEL GENERAL CATEGORIES")
     print("="*60)
     
     # Load dataset
@@ -35,35 +37,14 @@ def main():
     
     # Create prompt template
     print("\n[3/4] Creating prompt template...")
+    label_names = get_jel_names(language="es")
     prompt_template = MultiLabelPromptTemplate(
         available_labels=dataset.labels,
-        language="es"
+        language="es",
+        label_descriptions=label_names,
     )
     
     # Create multi-label model
-    model = LLMMultiLabelModel(
-        llm=llm,
-        available_labels=dataset.labels,
-        prompt_template=prompt_template,
-        batch_size=2  # Small batch for testing
-    )
-    print(model)
-    
-    # Test with a few examples
-    print("\n[4/4] Testing predictions...")
-    texts_test, labels_test = dataset.get_texts_and_labels("test")
-    sample_texts = texts_test[:5]  # Test with 5 samples
-    sample_labels = labels_test[:5]
-    
-    print(f"\nPredicting {len(sample_texts)} samples...")
-    predictions = model.predict(sample_texts)
-    
-    print("\n" + "="*60)
-    print("RESULTS")
-    print("="*60)
-    
-    # Create multi-label model
-    print("\n[4/5] Creating classification model...")
     model = LLMMultiLabelModel(
         llm=llm,
         available_labels=dataset.labels,
@@ -72,15 +53,29 @@ def main():
     )
     print(model)
     
-    # Create predictor and save results
-    print("\n[5/5] Generating and saving predictions...")
+    # Create predictor and save results for all splits
+    print("\n[4/4] Generating predictions and computing metrics for splits...")
     predictor = MultiLabelPredictor(model, dataset)
 
-    predictor.save_predictions(
-        split="test",
-        output_path=f"results/multilabel/TinyLlama-1.1B/test_predictions.parquet",
-        batch_size=4
-    )
+    for split in ["dev", "test"]:
+        print(f"\nProcessing split: {split}")
+        results_df = predictor.predict_split(split=split, batch_size=4)
+
+        # Save predictions
+        output_pred = Path(f"results/multilabel/TinyLlama-1.1B/{split}_predictions.parquet")
+        output_pred.parent.mkdir(parents=True, exist_ok=True)
+        results_df.to_parquet(output_pred, index=False)
+        print(f"Predicciones guardadas en: {output_pred}")
+
+        # Compute and save metrics
+        metrics = compute_multilabel_metrics(
+            true_labels=results_df["true_labels"].tolist(),
+            pred_labels=results_df["predicted_labels"].tolist(),
+            all_labels=dataset.labels,
+        )
+        output_metrics = Path(f"results/multilabel/TinyLlama-1.1B/{split}_metrics.json")
+        save_metrics(metrics, str(output_metrics))
+        print(f"Métricas guardadas en: {output_metrics}")
     print("\n" + "="*60)
     print("TEST COMPLETED")
     print("="*60)

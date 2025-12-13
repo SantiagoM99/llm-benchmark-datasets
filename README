@@ -1,0 +1,15 @@
+LLM Benchmark Datasets
+
+Multi-label JEL Evaluation
+- Prepare data under `data/multilabel_banrep` with `train.parquet`, `dev.parquet`, `test.parquet` containing columns `input_text` and `labels` (list of JEL codes).
+- Run the evaluation script to generate predictions and metrics.
+
+Quick Start (PowerShell):
+```
+python -m src.multi_label_main
+```
+
+Outputs:
+- Predictions: `results/multilabel/TinyLlama-1.1B/test_predictions.parquet`
+- Metrics: `results/multilabel/TinyLlama-1.1B/test_metrics.json`
+
