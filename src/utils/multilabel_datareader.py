@@ -117,6 +117,20 @@ class MultiLabelDataset:
             "total_size": len(self.train) + len(self.dev) + len(self.test)
         }
     
+    def get_split_size(self, split: str) -> int:
+        """
+        Get the number of samples in a split.
+        
+        Args:
+            split: 'train', 'dev', or 'test'
+            
+        Returns:
+            Number of samples in the split
+        """
+        if split not in self.data:
+            return 0
+        return len(self.data[split])
+    
     def __repr__(self) -> str:
         stats = self.get_stats()
         return (
