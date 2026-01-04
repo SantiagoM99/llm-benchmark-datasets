@@ -1,5 +1,5 @@
 # src/prompts/multilabel_prompt.py
-from typing import List, Dict, Optional, Tuple
+from typing import List
 from prompts.base_prompt import BasePromptTemplate
 
 
@@ -9,41 +9,18 @@ class MultiLabelPromptTemplate(BasePromptTemplate):
     
     This template creates prompts that ask the LLM to classify text
     into one or more categories from a predefined set.
-    Supports few-shot learning with examples.
     """
     
-    def __init__(
-        self, 
-        available_labels: List[str], 
-        language: str = "es", 
-        label_descriptions: Optional[Dict[str, str]] = None,
-        num_examples: int = 0,
-        examples: Optional[List[Tuple[str, List[str]]]] = None
-    ):
+    def __init__(self, available_labels: List[str], language: str = "es"):
         """
         Initialize the multi-label prompt template.
         
         Args:
             available_labels: List of possible labels
             language: Prompt language ('es' or 'en')
-            label_descriptions: Dictionary mapping labels to descriptions
-            num_examples: Number of few-shot examples to include
-            examples: List of (text, labels) tuples for few-shot learning
         """
         super().__init__(language=language)
         self.available_labels = available_labels
-        self.label_descriptions = label_descriptions or {}
-        self.num_examples = num_examples
-        self.examples = examples or []
-    
-    def set_examples(self, examples: List[Tuple[str, List[str]]]):
-        """
-        Set few-shot examples for the prompt.
-        
-        Args:
-            examples: List of (text, labels) tuples
-        """
-        self.examples = examples
     
     def create_prompt(self, text: str, **kwargs) -> str:
         """
@@ -57,48 +34,14 @@ class MultiLabelPromptTemplate(BasePromptTemplate):
             Formatted prompt as string
         """
         labels_str = ", ".join(self.available_labels)
-
-        # Build a readable list of labels with descriptions if available
-        if self.label_descriptions:
-            labeled_lines = []
-            for code in self.available_labels:
-                desc = self.label_descriptions.get(code, "")
-                if desc:
-                    labeled_lines.append(f"- {code}: {desc}")
-                else:
-                    labeled_lines.append(f"- {code}")
-            labels_block = "\n".join(labeled_lines)
-        else:
-            labels_block = labels_str
-        
-        # Build few-shot examples section
-        examples_section = ""
-        if self.num_examples > 0 and self.examples:
-            n_examples = min(self.num_examples, len(self.examples))
-            
-            if self.language == "es":
-                examples_section = "\nEjemplos:\n\n"
-                for i, (example_text, example_labels) in enumerate(self.examples[:n_examples], 1):
-                    labels_response = ", ".join(example_labels)
-                    examples_section += f"Ejemplo {i}:\n"
-                    examples_section += f"Texto: {example_text}\n"
-                    examples_section += f"Categorías: {labels_response}\n\n"
-            else:
-                examples_section = "\nExamples:\n\n"
-                for i, (example_text, example_labels) in enumerate(self.examples[:n_examples], 1):
-                    labels_response = ", ".join(example_labels)
-                    examples_section += f"Example {i}:\n"
-                    examples_section += f"Text: {example_text}\n"
-                    examples_section += f"Categories: {labels_response}\n\n"
         
         if self.language == "es":
             prompt = f"""Eres un asistente experto en clasificación de documentos económicos.
 
-Categorías disponibles:
-{labels_block}
+Categorías disponibles: {labels_str}
 
 Tu tarea es clasificar el siguiente texto en una o más de las categorías anteriores.
-{examples_section}
+
 Texto a clasificar:
 {text}
 
@@ -112,11 +55,10 @@ Categorías:"""
         else:
             prompt = f"""You are an expert assistant in economic document classification.
 
-Available categories:
-{labels_block}
+Available categories: {labels_str}
 
 Your task is to classify the following text into one or more of the above categories.
-{examples_section}
+
 Text to classify:
 {text}
 
@@ -172,7 +114,6 @@ Categories:"""
         return (
             f"MultiLabelPromptTemplate(\n"
             f"  n_labels={len(self.available_labels)},\n"
-            f"  language='{self.language}',\n"
-            f"  num_examples={self.num_examples}\n"
+            f"  language='{self.language}'\n"
             f")"
         )

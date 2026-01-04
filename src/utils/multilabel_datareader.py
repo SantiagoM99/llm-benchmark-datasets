@@ -46,7 +46,7 @@ class MultiLabelDataset:
         for df in [self.train, self.dev, self.test]:
             for label_array in df["labels"]:
                 all_labels.update(label_array)
-        return sorted(all_labels)
+        return sorted(list(all_labels))
     
     def get_split(self, split: str) -> pd.DataFrame:
         """
@@ -93,7 +93,7 @@ class MultiLabelDataset:
             Diccionario con el conteo de cada etiqueta
         """
         _, labels = self.get_texts_and_labels(split)
-        distribution = dict.fromkeys(self.labels, 0)
+        distribution = {label: 0 for label in self.labels}
         
         for label_list in labels:
             for label in label_list:
@@ -117,20 +117,6 @@ class MultiLabelDataset:
             "total_size": len(self.train) + len(self.dev) + len(self.test)
         }
     
-    def get_split_size(self, split: str) -> int:
-        """
-        Get the number of samples in a split.
-        
-        Args:
-            split: 'train', 'dev', or 'test'
-            
-        Returns:
-            Number of samples in the split
-        """
-        if split not in self.data:
-            return 0
-        return len(self.data[split])
-    
     def __repr__(self) -> str:
         stats = self.get_stats()
         return (
@@ -142,4 +128,7 @@ class MultiLabelDataset:
             f")"
         )
     
+
+dataset = MultiLabelDataset(data_dir="data/multilabel_banrep")
+print(dataset)
 
